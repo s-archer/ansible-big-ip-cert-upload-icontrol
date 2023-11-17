@@ -1,0 +1,55 @@
+{
+    "class": "ADC",
+    "id": "myid",
+    "schemaVersion": "3.0.0",
+    "controls": {
+      "class": "Controls",
+      "trace": true,
+      "logLevel": "debug"
+    },
+    "Automated_Certs": {
+      "class": "Tenant",
+      "Automated_Certs_To_Be_Uploaded_By_Venafi": {
+        "class": "Application",
+        "pool": {
+          "class": "Pool",
+          "members": [
+            {
+              "serverAddresses": [
+                "192.0.2.100"
+              ],
+              "servicePort": 8080
+            }
+          ],
+          "monitors": [
+            "http"
+          ]
+        },
+        "service": {
+          "class": "Service_HTTPS",
+          "persistenceMethods": [],
+          "pool": "pool",
+          "serverTLS": "pTlsServer_Local",
+          "snat": "auto",
+          "virtualAddresses": [
+            "192.168.0.2"
+          ],
+          "virtualPort": 443
+        },
+        "pTlsServer_Local": {
+          "class": "TLS_Server",
+          "label": "simplest decl requires just cert",
+          "certificates": [
+            {
+              "certificate": "tlsserver_local_cert"
+            }
+          ]
+        },
+        "tlsserver_local_cert": {
+          "class": "Certificate",
+          "certificate": {"bigip":"/Common/{{ cert_file_name }}"},
+          "privateKey": {"bigip":"/Common/{{ key_file_name }}"}
+        }
+      }
+    }
+  }

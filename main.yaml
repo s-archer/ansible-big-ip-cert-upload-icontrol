@@ -1,0 +1,118 @@
+---
+#------------------------------------------------------------------------------
+# Playbook to DEPLOY rSeries Tenants. 
+#
+#   Requires []
+#------------------------------------------------------------------------------
+
+- name: DEPLOY BIG-IP TENANT ON R-SERIES HOST
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    cert_file_dir: ./certs/
+    cert_file_name: sentence.local.crt
+    key_file_name: sentence.local.key
+    bigip_mgmt_ip: <IP>
+    bigip_user: <user>
+    bigip_pass: <password>
+    loop_files: 
+      - "{{ cert_file_name }}"
+      - "{{ key_file_name }}"
+
+  tasks:
+
+  - name: GET FILE SIZE
+    stat:
+      path: "{{ cert_file_dir }}{{ item }}"
+    loop: "{{ loop_files }}"
+    loop_control:
+      loop_var: item
+    register: file_size_info
+    
+
+  - name: SHOW FILE SIZE
+    debug:
+      msg:  "{{ item.stat.size }}"
+    loop: "{{ file_size_info.results }}"
+    loop_control:
+      loop_var: item
+
+
+  # - name: SHOW FILE SIZE
+  #   debug:
+  #     msg:  "{{ item.item }}"
+  #   loop: "{{ file_size_info.results }}"
+  #   loop_control:
+  #     loop_var: item
+
+
+  - name: UPLOAD CERT & KEY
+    ansible.builtin.uri:
+      url: "https://{{ bigip_user}}:{{ bigip_pass}}@{{ bigip_mgmt_ip }}/mgmt/shared/file-transfer/uploads/{{ item.item }}"
+      method: POST
+      headers:
+        Content-Type: application/octet-stream
+        # Content-Range: "0-{{ cert_file_info.stat.size -1 }}/{{ cert_file_info.stat.size }}"
+        Content-Range: "0-{{ item.stat.size -1}}/{{ item.stat.size }}"
+      src: "{{ item.stat.path }}" 
+      force_basic_auth: yes
+      status_code: 
+        - 200
+      validate_certs: no
+    loop: "{{ file_size_info.results }}"
+    loop_control:
+      loop_var: item
+    register: upload_cert_response
+
+
+  # - name: SHOW BODY
+  #   debug:
+  #     msg:  "{{ lookup('template', './templates/body.json.j2', split_lines=False) | to_nice_json }}"
+  #   loop: "{{ file_size_info.results }}"
+  #   loop_control:
+  #     loop_var: item
+
+
+  - name: IMPORT CERT 
+    ansible.builtin.uri:
+      url: "https://{{ bigip_user}}:{{ bigip_pass}}@{{ bigip_mgmt_ip }}/mgmt/tm/sys/crypto/cert"
+      method: POST
+      body: "{{ lookup('template', './templates/cert_body.json.j2', split_lines=False) | to_nice_json }}"
+      body_format: json
+      force_basic_auth: yes
+      status_code: 
+        - 200
+      validate_certs: no
+    register: import_cert_response
+
+
+  - name: IMPORT KEY 
+    ansible.builtin.uri:
+      url: "https://{{ bigip_user}}:{{ bigip_pass}}@{{ bigip_mgmt_ip }}/mgmt/tm/sys/crypto/key"
+      method: POST
+      body: "{{ lookup('template', './templates/key_body.json.j2', split_lines=False) | to_nice_json }}"
+      body_format: json
+      force_basic_auth: yes
+      status_code: 
+        - 200
+      validate_certs: no
+    register: import_key_response
+
+
+  - name: DEPLOY AS3 DECLARATION WITH BIG-IP POINTER
+    uri:
+      url: "https://{{ bigip_user}}:{{ bigip_pass}}@{{ bigip_mgmt_ip }}/mgmt/shared/appsvcs/declare"
+      method: POST
+      body: "{{ lookup('template','./templates/as3_declaration.json.j2') }}"
+      force_basic_auth: yes
+      status_code: 
+        - 200
+        - 204
+      body_format: json
+      validate_certs: no
+    register: as3_response 
+
+  - name: SHOW AS3 RESPONSE
+    debug:
+      msg:  "{{ as3_response }}"
